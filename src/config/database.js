@@ -17,7 +17,7 @@ export async function connectToDatabase({
   mongoClient = new MongoClient(mongoUri, {
     serverApi: {
       version: ServerApiVersion.v1,
-      strict: true,
+      strict: false,
       deprecationErrors: true,
     },
     maxPoolSize: 10,

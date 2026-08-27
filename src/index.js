@@ -2,6 +2,7 @@ import {
   closeDatabaseConnection,
   connectToDatabase,
 } from './config/database.js';
+import { ensureDatabaseIndexes } from './config/indexes.js';
 import { loadEnvironment } from './config/env.js';
 import { createApp } from './app.js';
 
@@ -12,7 +13,7 @@ async function startServer() {
   try {
     const environment = loadEnvironment();
 
-    await connectToDatabase({
+    const database = await connectToDatabase({
       mongoUri: environment.mongoUri,
       mongoDatabaseName:
         environment.mongoDatabaseName,
@@ -20,6 +21,12 @@ async function startServer() {
 
     console.log(
       '[AI Prompt Marketplace API] MongoDB connected successfully.',
+    );
+
+    await ensureDatabaseIndexes(database);
+
+    console.log(
+      '[AI Prompt Marketplace API] Database indexes are ready.',
     );
 
     const app = createApp({
