@@ -1,41 +1,106 @@
-import 'dotenv/config';
-import app from './app.js';
+import {
+  closeDatabaseConnection,
+  connectToDatabase,
+} from './config/database.js';
+import { loadEnvironment } from './config/env.js';
+import { createApp } from './app.js';
 
-const port = Number.parseInt(process.env.PORT || '5000', 10);
+let server = null;
+let isShuttingDown = false;
 
-const server = app.listen(port, () => {
-  console.log(
-    `[AI Prompt Marketplace API] Server running at http://localhost:${port}`,
-  );
+async function startServer() {
+  try {
+    const environment = loadEnvironment();
 
-  console.log(
-    `[AI Prompt Marketplace API] Health check available at http://localhost:${port}/api/health`,
-  );
-});
+    await connectToDatabase({
+      mongoUri: environment.mongoUri,
+      mongoDatabaseName:
+        environment.mongoDatabaseName,
+    });
 
-function shutDownServer(signal) {
-  console.log(
-    `[AI Prompt Marketplace API] ${signal} received. Closing the server safely.`,
-  );
+    console.log(
+      '[AI Prompt Marketplace API] MongoDB connected successfully.',
+    );
 
-  server.close(() => {
-    console.log('[AI Prompt Marketplace API] Server closed successfully.');
-    process.exit(0);
-  });
+    const app = createApp({
+      allowedOrigins:
+        environment.clientOrigins,
+      nodeEnvironment:
+        environment.nodeEnvironment,
+    });
 
-  setTimeout(() => {
+    server = app.listen(
+      environment.port,
+      () => {
+        console.log(
+          `[AI Prompt Marketplace API] Server running at http://localhost:${environment.port}`,
+        );
+
+        console.log(
+          `[AI Prompt Marketplace API] Health check available at http://localhost:${environment.port}/api/health`,
+        );
+      },
+    );
+  } catch (error) {
     console.error(
-      '[AI Prompt Marketplace API] Forced shutdown after waiting for active requests.',
+      `[AI Prompt Marketplace API] Startup failed: ${error.message}`,
+    );
+
+    await closeDatabaseConnection().catch(
+      () => undefined,
     );
 
     process.exit(1);
-  }, 10000).unref();
+  }
+}
+
+async function shutDownServer(signal) {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+
+  console.log(
+    `[AI Prompt Marketplace API] ${signal} received. Closing active services.`,
+  );
+
+  try {
+    if (server) {
+      await new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
+      });
+    }
+
+    await closeDatabaseConnection();
+
+    console.log(
+      '[AI Prompt Marketplace API] Server and database connections closed successfully.',
+    );
+
+    process.exit(0);
+  } catch (error) {
+    console.error(
+      `[AI Prompt Marketplace API] Shutdown failed: ${error.message}`,
+    );
+
+    process.exit(1);
+  }
 }
 
 process.on('SIGTERM', () => {
-  shutDownServer('SIGTERM');
+  void shutDownServer('SIGTERM');
 });
 
 process.on('SIGINT', () => {
-  shutDownServer('SIGINT');
+  void shutDownServer('SIGINT');
 });
+
+void startServer();
