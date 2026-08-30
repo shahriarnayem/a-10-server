@@ -4,7 +4,7 @@ import {
 } from './config/database.js';
 import { ensureDatabaseIndexes } from './config/indexes.js';
 import { loadEnvironment } from './config/env.js';
-import { createApp } from './app.js';
+import { createApp } from "./app.js";
 
 let server = null;
 let isShuttingDown = false;
