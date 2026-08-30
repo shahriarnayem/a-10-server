@@ -1,10 +1,10 @@
+import app from "./app.js";
 import {
   closeDatabaseConnection,
   connectToDatabase,
-} from './config/database.js';
-import { ensureDatabaseIndexes } from './config/indexes.js';
-import { loadEnvironment } from './config/env.js';
-import { createApp } from "./app.js";
+} from "./config/database.js";
+import { ensureDatabaseIndexes } from "./config/indexes.js";
+import { loadEnvironment } from "./config/env.js";
 
 let server = null;
 let isShuttingDown = false;
@@ -13,28 +13,25 @@ async function startServer() {
   try {
     const environment = loadEnvironment();
 
-    const database = await connectToDatabase({
+    await connectToDatabase({
       mongoUri: environment.mongoUri,
       mongoDatabaseName:
         environment.mongoDatabaseName,
     });
 
     console.log(
-      '[AI Prompt Marketplace API] MongoDB connected successfully.',
+      "[AI Prompt Marketplace API] MongoDB connected successfully.",
     );
+
+    const database = (
+      await import("./config/database.js")
+    ).getDatabase();
 
     await ensureDatabaseIndexes(database);
 
     console.log(
-      '[AI Prompt Marketplace API] Database indexes are ready.',
+      "[AI Prompt Marketplace API] Database indexes are ready.",
     );
-
-    const app = createApp({
-      allowedOrigins:
-        environment.clientOrigins,
-      nodeEnvironment:
-        environment.nodeEnvironment,
-    });
 
     server = app.listen(
       environment.port,
@@ -89,7 +86,7 @@ async function shutDownServer(signal) {
     await closeDatabaseConnection();
 
     console.log(
-      '[AI Prompt Marketplace API] Server and database connections closed successfully.',
+      "[AI Prompt Marketplace API] Server and database connections closed successfully.",
     );
 
     process.exit(0);
@@ -102,12 +99,12 @@ async function shutDownServer(signal) {
   }
 }
 
-process.on('SIGTERM', () => {
-  void shutDownServer('SIGTERM');
+process.on("SIGTERM", () => {
+  void shutDownServer("SIGTERM");
 });
 
-process.on('SIGINT', () => {
-  void shutDownServer('SIGINT');
+process.on("SIGINT", () => {
+  void shutDownServer("SIGINT");
 });
 
 void startServer();
