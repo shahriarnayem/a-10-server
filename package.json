@@ -7,6 +7,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "lint": "eslint .",
+    "db:indexes": "node scripts/createIndexes.js",
     "seed": "node scripts/seed.js"
   },
   "keywords": [],
