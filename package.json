@@ -20,7 +20,8 @@
     "express": "^5.2.1",
     "firebase-admin": "^14.3.0",
     "jsonwebtoken": "^9.0.3",
-    "mongodb": "^7.6.0"
+    "mongodb": "^7.6.0",
+    "stripe": "^22.6.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

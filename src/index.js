@@ -1,10 +1,14 @@
-import app from "./app.js";
 import {
   closeDatabaseConnection,
   connectToDatabase,
 } from "./config/database.js";
-import { ensureDatabaseIndexes } from "./config/indexes.js";
-import { loadEnvironment } from "./config/env.js";
+import {
+  ensureDatabaseIndexes,
+} from "./config/indexes.js";
+import {
+  loadEnvironment,
+} from "./config/env.js";
+import { createApp } from "./app.js";
 
 let server = null;
 let isShuttingDown = false;
@@ -13,25 +17,27 @@ async function startServer() {
   try {
     const environment = loadEnvironment();
 
-    await connectToDatabase({
-      mongoUri: environment.mongoUri,
-      mongoDatabaseName:
-        environment.mongoDatabaseName,
-    });
+    const database =
+      await connectToDatabase({
+        mongoUri: environment.mongoUri,
+        mongoDatabaseName:
+          environment.mongoDatabaseName,
+      });
 
     console.log(
       "[AI Prompt Marketplace API] MongoDB connected successfully.",
     );
-
-    const database = (
-      await import("./config/database.js")
-    ).getDatabase();
 
     await ensureDatabaseIndexes(database);
 
     console.log(
       "[AI Prompt Marketplace API] Database indexes are ready.",
     );
+
+    const app = createApp({
+      allowedOrigins:
+        environment.clientOrigins,
+    });
 
     server = app.listen(
       environment.port,
@@ -71,16 +77,18 @@ async function shutDownServer(signal) {
 
   try {
     if (server) {
-      await new Promise((resolve, reject) => {
-        server.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
+      await new Promise(
+        (resolve, reject) => {
+          server.close((error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
 
-          resolve();
-        });
-      });
+            resolve();
+          });
+        },
+      );
     }
 
     await closeDatabaseConnection();
