@@ -6,6 +6,7 @@ import {
   getDatabase,
 } from "./config/database.js";
 
+import adminRoutes from "./routes/admin.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import discoveryRoutes from "./routes/discovery.routes.js";
 import engagementRoutes from "./routes/engagement.routes.js";
@@ -20,31 +21,40 @@ export function createApp({
 } = {}) {
   const app = express();
 
+  const origins =
+    Array.isArray(allowedOrigins) &&
+    allowedOrigins.length > 0
+      ? allowedOrigins
+      : [env.clientUrl];
+
   app.use(
     cors({
       origin(origin, callback) {
-        if (
-          !origin ||
-          allowedOrigins.includes(origin)
-        ) {
+
+        if (!origin) {
           callback(null, true);
           return;
         }
 
-        callback(
-          new Error(
-            "This origin is not allowed by CORS.",
-          ),
+        if (origins.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        const corsError = new Error(
+          `CORS blocked request from origin: ${origin}`,
         );
+
+        corsError.status = 403;
+
+        callback(corsError);
       },
+
       credentials: true,
     }),
   );
 
-  /*
-   * Stripe requires the original raw request body.
-   * This route must appear before express.json().
-   */
+
   app.post(
     "/api/payments/webhook",
     express.raw({
@@ -60,7 +70,7 @@ export function createApp({
   );
 
   app.get("/", (req, res) => {
-    res.json({
+    return res.json({
       name: "AI Prompt Marketplace API",
       message:
         "Discover, publish, and manage reusable AI prompts.",
@@ -87,14 +97,13 @@ export function createApp({
     },
   );
 
+
   app.use("/api/auth", authRoutes);
   app.use("/api/users", usersRoutes);
   app.use("/api/payments", paymentsRoutes);
+  app.use("/api/admin", adminRoutes);
 
-  /*
-   * Discovery routes must appear before
-   * dynamic /api/prompts/:id routes.
-   */
+
   app.use(
     "/api/prompts",
     discoveryRoutes,
@@ -111,12 +120,13 @@ export function createApp({
   );
 
   app.use((req, res) => {
-    res.status(404).json({
+    return res.status(404).json({
       message:
         "The requested AI prompt marketplace endpoint was not found.",
     });
   });
 
+ 
   app.use((error, req, res, next) => {
     console.error(error);
 
@@ -136,4 +146,7 @@ export function createApp({
   return app;
 }
 
-export default createApp();
+const app = createApp();
+
+
+export default app;
