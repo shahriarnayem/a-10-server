@@ -33,6 +33,10 @@ async function createIndexes() {
     "[indexes] AI Prompt Marketplace database indexes are ready.",
   );
 }
+await database.collection("warnings").createIndex(
+  { userId: 1, read: 1, createdAt: -1 },
+  { name: "warnings_user_inbox" },
+);
 
 async function runCreateIndexes() {
   try {

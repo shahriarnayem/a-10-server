@@ -10,6 +10,7 @@ import adminRoutes from "./routes/admin.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import discoveryRoutes from "./routes/discovery.routes.js";
 import engagementRoutes from "./routes/engagement.routes.js";
+import notificationsRoutes from "./routes/notifications.routes.js";
 import paymentsRoutes, {
   stripeWebhookHandler,
 } from "./routes/payments.routes.js";
@@ -30,7 +31,10 @@ export function createApp({
   app.use(
     cors({
       origin(origin, callback) {
-
+        /*
+         * Allow requests without an Origin header.
+         * This includes Stripe, Postman and curl.
+         */
         if (!origin) {
           callback(null, true);
           return;
@@ -54,7 +58,10 @@ export function createApp({
     }),
   );
 
-
+  /*
+   * Stripe requires the original raw request body.
+   * This route must remain before express.json().
+   */
   app.post(
     "/api/payments/webhook",
     express.raw({
@@ -97,13 +104,37 @@ export function createApp({
     },
   );
 
-
+  /*
+   * Authentication and account routes
+   */
   app.use("/api/auth", authRoutes);
   app.use("/api/users", usersRoutes);
-  app.use("/api/payments", paymentsRoutes);
+
+  /*
+   * Payment routes
+   */
+  app.use(
+    "/api/payments",
+    paymentsRoutes,
+  );
+
+  /*
+   * Administrator routes
+   */
   app.use("/api/admin", adminRoutes);
 
+  /*
+   * Step 28 notification routes
+   */
+  app.use(
+    "/api/notifications",
+    notificationsRoutes,
+  );
 
+  /*
+   * Prompt discovery and engagement routes
+   * must be mounted before dynamic prompt routes.
+   */
   app.use(
     "/api/prompts",
     discoveryRoutes,
@@ -119,6 +150,9 @@ export function createApp({
     promptsRoutes,
   );
 
+  /*
+   * API 404 handler
+   */
   app.use((req, res) => {
     return res.status(404).json({
       message:
@@ -126,7 +160,9 @@ export function createApp({
     });
   });
 
- 
+  /*
+   * Global error handler
+   */
   app.use((error, req, res, next) => {
     console.error(error);
 
@@ -146,7 +182,10 @@ export function createApp({
   return app;
 }
 
+/*
+ * This supports older files that use:
+ * import app from "./app.js";
+ */
 const app = createApp();
-
 
 export default app;
