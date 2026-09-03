@@ -14,6 +14,7 @@ import {
 
 import adminRoutes from "./routes/admin.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import creatorsRoutes from "./routes/creators.routes.js";
 import discoveryRoutes from "./routes/discovery.routes.js";
 import engagementRoutes from "./routes/engagement.routes.js";
 import notificationsRoutes from "./routes/notifications.routes.js";
@@ -22,7 +23,6 @@ import paymentsRoutes, {
 } from "./routes/payments.routes.js";
 import promptsRoutes from "./routes/prompts.routes.js";
 import usersRoutes from "./routes/users.routes.js";
-import creatorsRoutes from "./routes/creators.routes.js";
 
 function normalizeOrigins(allowedOrigins) {
   if (Array.isArray(allowedOrigins)) {
@@ -56,6 +56,9 @@ export function createApp({
 
   app.disable("x-powered-by");
 
+  /*
+   * Security headers
+   */
   app.use(
     helmet({
       crossOriginResourcePolicy: {
@@ -64,12 +67,15 @@ export function createApp({
     }),
   );
 
+  /*
+   * CORS configuration
+   */
   app.use(
     cors({
       origin(origin, callback) {
         /*
-         * Allow requests with no Origin header.
-         * Stripe, curl and Postman may not send one.
+         * Allow requests without an Origin header.
+         * Stripe, curl and Postman may not provide one.
          */
         if (!origin) {
           callback(null, true);
@@ -110,8 +116,12 @@ export function createApp({
   );
 
   /*
-   * Stripe webhook must receive the original body.
-   * Keep this before express.json() and apiLimiter.
+   * Stripe requires the original raw request body.
+   *
+   * This route must remain before:
+   * - express.json()
+   * - apiLimiter
+   * - paymentsRoutes
    */
   app.post(
     "/api/payments/webhook",
@@ -122,6 +132,9 @@ export function createApp({
     stripeWebhookHandler,
   );
 
+  /*
+   * Parse normal JSON requests.
+   */
   app.use(
     express.json({
       limit: "1mb",
@@ -129,11 +142,14 @@ export function createApp({
   );
 
   /*
-   * General protection for API endpoints.
+   * General rate limiting for API endpoints.
    * The Stripe webhook is mounted before this.
    */
   app.use("/api", apiLimiter);
 
+  /*
+   * API information
+   */
   app.get("/", (req, res) => {
     return res.json({
       name: "AI Prompt Marketplace API",
@@ -142,6 +158,9 @@ export function createApp({
     });
   });
 
+  /*
+   * Database health check
+   */
   app.get(
     "/api/health",
     async (req, res, next) => {
@@ -164,7 +183,10 @@ export function createApp({
   );
 
   /*
-   * Authentication has a stricter rate limit.
+   * Authentication routes
+   *
+   * Authentication receives a stricter
+   * rate limit than other endpoints.
    */
   app.use(
     "/api/auth",
@@ -172,24 +194,60 @@ export function createApp({
     authRoutes,
   );
 
-  app.use("/api/users", usersRoutes);
+  /*
+   * User routes
+   */
+  app.use(
+    "/api/users",
+    usersRoutes,
+  );
 
+  /*
+   * Payment routes
+   *
+   * The Stripe webhook was mounted separately
+   * before express.json().
+   */
   app.use(
     "/api/payments",
     paymentsRoutes,
   );
 
-  app.use("/api/admin", adminRoutes);
+  /*
+   * Admin routes
+   */
+  app.use(
+    "/api/admin",
+    adminRoutes,
+  );
 
+  /*
+   * Notification routes
+   */
   app.use(
     "/api/notifications",
     notificationsRoutes,
   );
 
   /*
-   * These routes must stay in this order.
-   * Discovery and engagement routes should be
-   * mounted before dynamic /:id prompt routes.
+   * Creator profile routes
+   *
+   * Public request:
+   * GET /api/creators/:id
+   *
+   * Authenticated owner request:
+   * PATCH /api/creators/me
+   */
+  app.use(
+    "/api/creators",
+    creatorsRoutes,
+  );
+
+  /*
+   * Prompt routes must remain in this order.
+   *
+   * Discovery and engagement routes must be
+   * registered before dynamic prompt routes.
    */
   app.use(
     "/api/prompts",
@@ -208,6 +266,8 @@ export function createApp({
 
   /*
    * API 404 handler
+   *
+   * This must remain after every route.
    */
   app.use((req, res) => {
     return res.status(404).json({
@@ -218,6 +278,8 @@ export function createApp({
 
   /*
    * Global error handler
+   *
+   * This must be the final middleware.
    */
   app.use((error, req, res, next) => {
     console.error(error);
@@ -233,6 +295,13 @@ export function createApp({
       });
     }
 
+    if (error.type === "entity.parse.failed") {
+      return res.status(400).json({
+        message:
+          "The marketplace request contains invalid JSON.",
+      });
+    }
+
     return res
       .status(error.status || 500)
       .json({
@@ -244,7 +313,6 @@ export function createApp({
 
   return app;
 }
-
 
 const app = createApp();
 
