@@ -24,6 +24,7 @@ import paymentsRoutes, {
 import promptsRoutes from "./routes/prompts.routes.js";
 import usersRoutes from "./routes/users.routes.js";
 import collectionsRoutes from "./routes/collections.routes.js";
+import followsRoutes from "./routes/follows.routes.js";
 
 
 function normalizeOrigins(allowedOrigins) {
@@ -58,6 +59,7 @@ export function createApp({
 
   app.disable("x-powered-by");
   app.use("/api/collections", collectionsRoutes);
+  app.use("/api/follows", followsRoutes);
 
   /*
    * Security headers
