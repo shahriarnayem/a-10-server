@@ -23,6 +23,8 @@ import paymentsRoutes, {
 } from "./routes/payments.routes.js";
 import promptsRoutes from "./routes/prompts.routes.js";
 import usersRoutes from "./routes/users.routes.js";
+import collectionsRoutes from "./routes/collections.routes.js";
+
 
 function normalizeOrigins(allowedOrigins) {
   if (Array.isArray(allowedOrigins)) {
@@ -55,6 +57,7 @@ export function createApp({
   }
 
   app.disable("x-powered-by");
+  app.use("/api/collections", collectionsRoutes);
 
   /*
    * Security headers
