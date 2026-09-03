@@ -1,10 +1,16 @@
 import cors from "cors";
 import express from "express";
+import helmet from "helmet";
 
 import { env } from "./config/env.js";
 import {
   getDatabase,
 } from "./config/database.js";
+
+import {
+  apiLimiter,
+  authLimiter,
+} from "./middleware/security.js";
 
 import adminRoutes from "./routes/admin.routes.js";
 import authRoutes from "./routes/auth.routes.js";
@@ -17,23 +23,52 @@ import paymentsRoutes, {
 import promptsRoutes from "./routes/prompts.routes.js";
 import usersRoutes from "./routes/users.routes.js";
 
+function normalizeOrigins(allowedOrigins) {
+  if (Array.isArray(allowedOrigins)) {
+    return allowedOrigins
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof allowedOrigins === "string") {
+    return allowedOrigins
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+  }
+
+  return [env.clientUrl].filter(Boolean);
+}
+
 export function createApp({
   allowedOrigins = env.clientOrigins,
+  nodeEnvironment = env.nodeEnv,
 } = {}) {
   const app = express();
 
   const origins =
-    Array.isArray(allowedOrigins) &&
-    allowedOrigins.length > 0
-      ? allowedOrigins
-      : [env.clientUrl];
+    normalizeOrigins(allowedOrigins);
+
+  if (nodeEnvironment === "production") {
+    app.set("trust proxy", 1);
+  }
+
+  app.disable("x-powered-by");
+
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: {
+        policy: "cross-origin",
+      },
+    }),
+  );
 
   app.use(
     cors({
       origin(origin, callback) {
         /*
-         * Allow requests without an Origin header.
-         * This includes Stripe, Postman and curl.
+         * Allow requests with no Origin header.
+         * Stripe, curl and Postman may not send one.
          */
         if (!origin) {
           callback(null, true);
@@ -45,27 +80,43 @@ export function createApp({
           return;
         }
 
-        const corsError = new Error(
+        const error = new Error(
           `CORS blocked request from origin: ${origin}`,
         );
 
-        corsError.status = 403;
+        error.status = 403;
 
-        callback(corsError);
+        callback(error);
       },
 
       credentials: true,
+
+      methods: [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+      ],
+
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Stripe-Signature",
+      ],
     }),
   );
 
   /*
-   * Stripe requires the original raw request body.
-   * This route must remain before express.json().
+   * Stripe webhook must receive the original body.
+   * Keep this before express.json() and apiLimiter.
    */
   app.post(
     "/api/payments/webhook",
     express.raw({
       type: "application/json",
+      limit: "1mb",
     }),
     stripeWebhookHandler,
   );
@@ -75,6 +126,12 @@ export function createApp({
       limit: "1mb",
     }),
   );
+
+  /*
+   * General protection for API endpoints.
+   * The Stripe webhook is mounted before this.
+   */
+  app.use("/api", apiLimiter);
 
   app.get("/", (req, res) => {
     return res.json({
@@ -97,6 +154,7 @@ export function createApp({
           service:
             "AI Prompt Marketplace API",
           database: "connected",
+          environment: nodeEnvironment,
         });
       } catch (error) {
         return next(error);
@@ -105,35 +163,32 @@ export function createApp({
   );
 
   /*
-   * Authentication and account routes
+   * Authentication has a stricter rate limit.
    */
-  app.use("/api/auth", authRoutes);
+  app.use(
+    "/api/auth",
+    authLimiter,
+    authRoutes,
+  );
+
   app.use("/api/users", usersRoutes);
 
-  /*
-   * Payment routes
-   */
   app.use(
     "/api/payments",
     paymentsRoutes,
   );
 
-  /*
-   * Administrator routes
-   */
   app.use("/api/admin", adminRoutes);
 
-  /*
-   * Step 28 notification routes
-   */
   app.use(
     "/api/notifications",
     notificationsRoutes,
   );
 
   /*
-   * Prompt discovery and engagement routes
-   * must be mounted before dynamic prompt routes.
+   * These routes must stay in this order.
+   * Discovery and engagement routes should be
+   * mounted before dynamic /:id prompt routes.
    */
   app.use(
     "/api/prompts",
@@ -170,6 +225,13 @@ export function createApp({
       return next(error);
     }
 
+    if (error.type === "entity.too.large") {
+      return res.status(413).json({
+        message:
+          "The marketplace request body is too large.",
+      });
+    }
+
     return res
       .status(error.status || 500)
       .json({
@@ -182,10 +244,7 @@ export function createApp({
   return app;
 }
 
-/*
- * This supports older files that use:
- * import app from "./app.js";
- */
+
 const app = createApp();
 
 export default app;
