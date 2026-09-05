@@ -3,12 +3,12 @@ import {
   connectToDatabase,
 } from "./config/database.js";
 import {
-  ensureDatabaseIndexes,
-} from "./config/indexes.js";
-import {
   loadEnvironment,
 } from "./config/env.js";
-import { createApp } from "./app.js";
+import {
+  ensureDatabaseIndexes,
+} from "./config/indexes.js";
+import app from "./app.js";
 
 let server = null;
 let isShuttingDown = false;
@@ -33,11 +33,6 @@ async function startServer() {
     console.log(
       "[AI Prompt Marketplace API] Database indexes are ready.",
     );
-
-    const app = createApp({
-      allowedOrigins:
-        environment.clientOrigins,
-    });
 
     server = app.listen(
       environment.port,
@@ -77,18 +72,16 @@ async function shutDownServer(signal) {
 
   try {
     if (server) {
-      await new Promise(
-        (resolve, reject) => {
-          server.close((error) => {
-            if (error) {
-              reject(error);
-              return;
-            }
+      await new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
 
-            resolve();
-          });
-        },
-      );
+          resolve();
+        });
+      });
     }
 
     await closeDatabaseConnection();
