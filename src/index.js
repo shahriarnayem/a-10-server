@@ -1,14 +1,10 @@
+import app from "./app.js";
 import {
   closeDatabaseConnection,
   connectToDatabase,
 } from "./config/database.js";
-import {
-  loadEnvironment,
-} from "./config/env.js";
-import {
-  ensureDatabaseIndexes,
-} from "./config/indexes.js";
-import app from "./app.js";
+import { loadEnvironment } from "./config/env.js";
+import { ensureDatabaseIndexes } from "./config/indexes.js";
 
 let server = null;
 let isShuttingDown = false;
@@ -17,12 +13,11 @@ async function startServer() {
   try {
     const environment = loadEnvironment();
 
-    const database =
-      await connectToDatabase({
-        mongoUri: environment.mongoUri,
-        mongoDatabaseName:
-          environment.mongoDatabaseName,
-      });
+    // Connect to MongoDB and ensure indexes for local dev
+    const database = await connectToDatabase({
+      mongoUri: environment.mongoUri,
+      mongoDatabaseName: environment.mongoDatabaseName,
+    });
 
     console.log(
       "[AI Prompt Marketplace API] MongoDB connected successfully.",
@@ -34,26 +29,20 @@ async function startServer() {
       "[AI Prompt Marketplace API] Database indexes are ready.",
     );
 
-    server = app.listen(
-      environment.port,
-      () => {
-        console.log(
-          `[AI Prompt Marketplace API] Server running at http://localhost:${environment.port}`,
-        );
-
-        console.log(
-          `[AI Prompt Marketplace API] Health check available at http://localhost:${environment.port}/api/health`,
-        );
-      },
-    );
+    server = app.listen(environment.port, () => {
+      console.log(
+        `[AI Prompt Marketplace API] Server running at http://localhost:${environment.port}`,
+      );
+      console.log(
+        `[AI Prompt Marketplace API] Health check available at http://localhost:${environment.port}/api/health`,
+      );
+    });
   } catch (error) {
     console.error(
       `[AI Prompt Marketplace API] Startup failed: ${error.message}`,
     );
 
-    await closeDatabaseConnection().catch(
-      () => undefined,
-    );
+    await closeDatabaseConnection().catch(() => undefined);
 
     process.exit(1);
   }
@@ -78,7 +67,6 @@ async function shutDownServer(signal) {
             reject(error);
             return;
           }
-
           resolve();
         });
       });
@@ -108,4 +96,7 @@ process.on("SIGINT", () => {
   void shutDownServer("SIGINT");
 });
 
-void startServer();
+// Skip app.listen when running as a Vercel Serverless Function
+if (process.env.VERCEL !== "1") {
+  void startServer();
+}
