@@ -27,21 +27,39 @@ import collectionsRoutes from "./routes/collections.routes.js";
 import followsRoutes from "./routes/follows.routes.js";
 
 
-function normalizeOrigins(allowedOrigins) {
+function normalizeOrigins(
+  allowedOrigins,
+  nodeEnvironment,
+) {
+  let origins = [];
+
   if (Array.isArray(allowedOrigins)) {
-    return allowedOrigins
+    origins = allowedOrigins
       .map((origin) => origin.trim())
       .filter(Boolean);
-  }
-
-  if (typeof allowedOrigins === "string") {
-    return allowedOrigins
+  } else if (
+    typeof allowedOrigins === "string"
+  ) {
+    origins = allowedOrigins
       .split(",")
       .map((origin) => origin.trim())
       .filter(Boolean);
   }
 
-  return [env.clientUrl].filter(Boolean);
+  if (env.clientUrl) {
+    origins.push(env.clientUrl.trim());
+  }
+
+  if (nodeEnvironment !== "production") {
+    origins.push(
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://localhost:3001",
+      "http://127.0.0.1:3001",
+    );
+  }
+
+  return [...new Set(origins)];
 }
 
 export function createApp({
@@ -50,8 +68,10 @@ export function createApp({
 } = {}) {
   const app = express();
 
-  const origins =
-    normalizeOrigins(allowedOrigins);
+  const origins = normalizeOrigins(
+  allowedOrigins,
+  nodeEnvironment,
+);
 
   if (nodeEnvironment === "production") {
     app.set("trust proxy", 1);
@@ -76,49 +96,44 @@ export function createApp({
    * CORS configuration
    */
   app.use(
-    cors({
-      origin(origin, callback) {
-        /*
-         * Allow requests without an Origin header.
-         * Stripe, curl and Postman may not provide one.
-         */
-        if (!origin) {
-          callback(null, true);
-          return;
-        }
+  cors({
+    origin(origin, callback) {
+      if (nodeEnvironment !== "production") {
+        callback(null, true);
+        return;
+      }
 
-        if (origins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
+      if (!origin || origins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
 
-        const error = new Error(
-          `CORS blocked request from origin: ${origin}`,
-        );
+      const error = new Error(
+        `CORS blocked request from origin: ${origin}`,
+      );
 
-        error.status = 403;
+      error.status = 403;
+      callback(error);
+    },
 
-        callback(error);
-      },
+    credentials: true,
 
-      credentials: true,
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
 
-      methods: [
-        "GET",
-        "POST",
-        "PUT",
-        "PATCH",
-        "DELETE",
-        "OPTIONS",
-      ],
-
-      allowedHeaders: [
-        "Content-Type",
-        "Authorization",
-        "Stripe-Signature",
-      ],
-    }),
-  );
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Stripe-Signature",
+    ],
+  }),
+);
 
   /*
    * Stripe requires the original raw request body.
@@ -268,6 +283,11 @@ export function createApp({
     "/api/prompts",
     promptsRoutes,
   );
+
+  app.use(
+  "/api/follows",
+  followsRoutes,
+);
 
   /*
    * API 404 handler
