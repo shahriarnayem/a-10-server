@@ -56,9 +56,27 @@ app.use(
   }),
 );
 
+// Dynamic CORS configuration allowing live frontend, local dev, and Vercel preview URLs
+const allowedOrigins = [
+  env.clientUrl,
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: env.clientUrl,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like Postman, cURL, or server-to-server)
+      if (!origin) return callback(null, true);
+
+      // Check if origin matches allowed list or any Vercel domain (*.vercel.app)
+      if (allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS policy violation: Origin ${origin} not allowed.`));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Stripe-Signature"],
