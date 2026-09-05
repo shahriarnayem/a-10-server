@@ -23,9 +23,7 @@ import versionsRoutes from "./routes/versions.routes.js";
  
 const app = express();
  
-if (env.nodeEnv === "production") {
-  app.set("trust proxy", 1);
-}
+app.set("trust proxy", 1);
  
 app.disable("x-powered-by");
  
