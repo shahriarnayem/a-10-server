@@ -5,6 +5,9 @@ import {
   attachOptionalMarketplaceUser,
   verifyMarketplaceToken,
 } from "../middleware/verifyMarketplaceToken.js";
+import {
+  recordPromptVersion,
+} from "../services/promptVersions.js";
  
 const router = Router();
  
@@ -187,6 +190,15 @@ router.patch("/:id", verifyMarketplaceToken, async (req, res, next) => {
       updateData.status = "pending";
       updateData.rejectionFeedback = "";
     }
+
+    await recordPromptVersion({
+  database,
+  prompt: existingPrompt,
+  actor: req.auth.user,
+  reason:
+    req.body.versionReason ||
+    "Prompt edited from creator workspace",
+});
  
     await database.collection("prompts").updateOne({ _id: promptId }, { $set: updateData });
     const prompt = await database.collection("prompts").findOne({ _id: promptId });

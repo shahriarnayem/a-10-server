@@ -25,6 +25,7 @@ import promptsRoutes from "./routes/prompts.routes.js";
 import usersRoutes from "./routes/users.routes.js";
 import collectionsRoutes from "./routes/collections.routes.js";
 import followsRoutes from "./routes/follows.routes.js";
+import versionsRoutes from "./routes/versions.routes.js";
 
 
 function normalizeOrigins(
@@ -278,6 +279,11 @@ export function createApp({
     "/api/prompts",
     engagementRoutes,
   );
+
+  app.use(
+  "/api/prompts",
+  versionsRoutes,
+);
 
   app.use(
     "/api/prompts",
